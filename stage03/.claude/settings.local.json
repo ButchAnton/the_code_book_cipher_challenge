@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python decrypt_stage03.py)",
+      "Bash(python solve_stage03.py)",
+      "WebFetch(domain:it.wikisource.org)",
+      "WebFetch(domain:en.wikisource.org)",
+      "WebFetch(domain:cultura.gov.it)",
+      "WebFetch(domain:www.gutenberg.org)"
+    ]
+  }
+}

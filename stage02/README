@@ -1,0 +1,49 @@
+This is a Ceasar shift cipher.
+
+==============================================================
+SOLUTION
+==============================================================
+
+Cipher type : Caesar shift (ROT-N), single key over the 26-letter
+              uppercase Latin alphabet.
+
+Method
+------
+1. Brute force all 26 possible shift values.
+2. Score each candidate plaintext by counting how many whitespace-
+   delimited tokens appear in the Latin vocabulary list
+   (../misc/latin_words.txt, ~28 k entries).
+3. Shift 7 scores 6 Latin word matches; every other shift scores 0.
+4. The codeword is extracted from the disclosure phrase embedded in
+   the plaintext: "DICTUM ARCANUM EST <CODEWORD>" (Latin: "The secret
+   motto is <CODEWORD>").
+
+Ciphertext
+----------
+MHILY LZA ZBHL XBPZXBL MVYABUHL HWWPBZ JSHBKPBZ JHLJBZ
+KPJABT HYJHUBT LZA ULBAYVU
+
+Plaintext (shift = 7)
+---------------------
+FABER EST SUAE QUISQUE FORTUNAE APPIUS CLAUDIUS CAECUS
+DICTUM ARCANUM EST NEUTRON
+
+Once I saw the candidate plaintext, I identified the language as
+Latin.  I grabbed a latin word list, and then added dictionary
+checking.  Therefore, this solution took two passes.  If one
+wanted to do it in one pass, one could do a web search for the
+text and look for a match.  I chose a half-way approach -- knowing
+the language but not directly searching for the text.
+
+Translation
+-----------
+Line 1: "Faber est suae quisque fortunae, Appius Claudius Caecus"
+        ("Every man is the artisan of his own fortune" — a maxim
+        attributed to the Roman censor Appius Claudius Caecus, c. 312 BC)
+
+Line 2: "Dictum arcanum est NEUTRON"
+        ("The secret motto is NEUTRON")
+
+Codeword : NEUTRON
+
+Script : decrypt_stage02.py

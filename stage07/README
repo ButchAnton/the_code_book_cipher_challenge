@@ -1,0 +1,82 @@
+STAGE 07 -- ADFGVX-VARIANT CIPHER (GERMAN)
+==========================================
+
+CODEWORD: FERMAT
+
+Cipher type: Homophonic Polybius square + columnar transposition
+  (like ADFGVX but with 8 symbols instead of 6: C E M O P R T U)
+Language: German
+Content: Biography of Pierre de Fermat (mathematician, 1607-1665)
+
+CIPHER STRUCTURE
+----------------
+- 8 cipher symbols (CEMOPRU) → 8x8 = 64-cell Polybius square
+- Columnar transposition, key length 8, 881 rows (7048 symbols total)
+- Homophonic: multiple bigrams map to the same plaintext letter
+- Each symbol pair = (row, col) in Polybius square → plaintext letter
+
+CRYPTANALYSIS METHOD
+--------------------
+1. Key length detection: 7048 = 8 × 881 (881 is prime → unique factoring)
+
+2. Cipher pair identification (pairwise IOC analysis):
+   - Computed IOC for all 28 pairs of columns
+   - 4 pairs showed IOC 0.067-0.070 (near German ~0.074):
+     (col0,col7), (col1,col2), (col3,col4), (col5,col6)
+   - Confirmed orientation: even-indexed col = ROW symbol
+   - Cipher pairs: [(0,7),(2,1),(4,3),(6,5)]
+
+3. Arrangement search (24 permutations × 16 orientations = 384 total):
+   - Scored each using German quadgrams from ../misc/german_quadgrams.txt
+   - Best arrangement: (1,2,3,0) — dominated by 0.77 margin at score -4.9675
+   - HC (50 restarts × 500k) confirmed no further improvement without fixes
+
+4. Homophone identification via plaintext reading:
+   - PRMATE → FERMAT: P→F (bigram RE maps to F not P)
+   - NEXTUDIUM → STUDIUM: X→S (bigram EO maps to S not X)
+   - QNIGMAMASCHINE → ENIGMAMASCHINE: Q→E (bigram CR maps to E not Q)
+
+5. Final decryption (homo_fix.py):
+   - Apply 3 homophone corrections to best HC poly
+   - Score improved: -4.9931 → -4.8822 → -4.8039 (50 restarts × 1M HC)
+   - German letter frequencies: E=1.04x, N=1.00x, I=0.99x, R=1.08x (near-perfect)
+
+POLYBIUS SQUARE (recovered)
+----------------------------
+     C   E   M   O   P   R   T   U
+    +--------------------------------
+  C | _   Q   A   .   .   E   .   D      _ = word space (most frequent bigram)
+  E | .   S   T   .   .   .   .   .      Q = homophone for E
+  M | .   .   .   .   .   R   .   L      Y = sentence-end marker
+  O | .   .   .   .   .   .   O   I      (PR) → J = unresolved homophone (D or E?)
+  P | .   .   .   N   .   .   U   .
+  R | .   .   F   .   .   .   G   .      F here = fixed from P via homophone
+  T | .   B   Y   .   .   .   .   .
+  U | .   W   .   .   .   .   E   N
+
+PLAINTEXT CONTENT
+-----------------
+German biographical text about Pierre de Fermat:
+- Born August 1607 in Beaumont-de-Lomagne, southwestern France
+- Education at Franciscan monastery; studied law at University of Toulouse
+- Conseiller (councillor) at Parliament of Toulouse
+- Mathematical correspondence with Digby (English), Wallis (English)
+- Career in state service described as rapid and distinguished
+- End-of-life illness and death
+- Final section: description of Enigma machine with Enigma-encrypted
+  24-character message (rotor settings stated as UNBEKANNT = unknown)
+
+SCRIPTS
+-------
+- diag_stage07.py  : IOC diagnostics, pairwise analysis
+- fast_decode.py   : Hill-climbing solver (50 restarts × 500k), corrected orientation
+- homo_fix.py      : Applies homophone fixes + extended HC (50 restarts × 1M)
+- decrypt_stage07.py: Original SA+HC solver
+
+RESIDUAL ISSUES
+---------------
+- (PR) bigram → J: probably D or E homophone (DIGBY appears as JIGBE/BIGS)
+- (TM) bigram → Y: sentence-end period marker, not a letter
+- Score -4.8039 vs ideal ~-3.5 for perfect German (2-3 bigrams still misassigned)
+- Score plateau: HC/SA both stuck; full homophonic attack would need solving
+  all ~64 bigrams simultaneously rather than 1:1 mapping assumption

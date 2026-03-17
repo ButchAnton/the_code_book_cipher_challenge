@@ -1,0 +1,63 @@
+This is a Vigenere cipher.
+
+=======================================================================
+SOLUTION
+=======================================================================
+
+Codeword : TRAJAN
+Key      : SCUBA  (length 5)
+Language : French
+
+-----------------------------------------------------------------------
+Source text
+-----------------------------------------------------------------------
+"L'Albatros" by Charles Baudelaire, from Les Fleurs du Mal (1857).
+The ciphertext encodes the poem in its entirety, with a codeword
+message appended immediately before the final line:
+
+  "LE MOT POUR ETAGE QUATRE EST TRAJAN"
+  ("The word for stage four is TRAJAN")
+
+TRAJAN (Marcus Ulpius Traianus) was Roman Emperor AD 98-117.
+
+-----------------------------------------------------------------------
+Methodology
+-----------------------------------------------------------------------
+
+1.  STRIP & COUNT
+    The ciphertext (604 uppercase letters, formatted as 23-letter
+    rows separated by blank lines) was stripped to a flat string of
+    604 A-Z characters.
+
+2.  INDEX OF COINCIDENCE (IOC)
+    For key lengths 1-30, the ciphertext was split into kl independent
+    Caesar streams and the mean IOC computed.  IOC peaks clearly at
+    key lengths that are multiples of 5:
+
+      kl=5  IOC=0.0786   <<<  true key length
+      kl=10 IOC=0.0788
+      kl=20 IOC=0.0791
+
+    French plain text has IOC ≈ 0.078, consistent with the peaks.
+    All non-multiple-of-5 lengths show IOC ≈ 0.044 (near random).
+
+3.  KASISKI TEST
+    Repeated trigram spacings also strongly favor kl=5 (59 votes),
+    with kl=10 and kl=20 as harmonics.
+
+4.  KEY RECOVERY (Chi-squared)
+    For each of the 5 streams, all 26 Caesar shifts were tried and
+    scored by Pearson Chi-squared against English and French letter
+    frequencies.  The shift minimizing Chi-squared recovers one key
+    character.  Result:  K-E-Y = S-C-U-B-A
+
+5.  QUADGRAM SCORING
+    The French quadgram table scored the decryption highest
+    (-2504.8), confirming the language and key.
+
+-----------------------------------------------------------------------
+Files
+-----------------------------------------------------------------------
+decrypt_stage04.py      -- solver script (IOC + Kasiski + Chi-squared)
+decrypted_stage04.txt   -- plaintext output
+README                  -- this file

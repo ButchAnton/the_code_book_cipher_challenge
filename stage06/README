@@ -1,0 +1,124 @@
+This is a Playfair cipher.
+
+============================================================
+SOLUTION
+============================================================
+
+Codeword: MOLYBDENUM
+
+Cipher type: Playfair cipher (standard variant, I=J, 25-letter key square)
+
+Language: English
+
+============================================================
+KEY SQUARE (recovered by solver)
+============================================================
+
+  X  Y  Z  Q  W
+  V  I  N  K  E
+  T  O  R  H  C
+  L  U  G  B  A
+  F  S  P  D  M
+
+============================================================
+PLAINTEXT (with Playfair padding X's shown as-is)
+============================================================
+
+THIS STAGE IS NUMBER SIX AND IT IS A PLAYFAIR CIPHER STOP
+THE FOLLOWING STAGE IS NUMBER SEVEN WITHIN THE CONTEXT OF
+THIS COMPETITION AND IT IS ENCRYPTED ACCORDING TO AN ADFGVX
+TYPE CIPHER STOP WHEN YOU ATTEMPT TO CRYPTANALYSE STAGE SEVEN
+YOU WILL SEE THAT IT IS MORE COMPLICATED THAN A STRAIGHTFORWARD
+ADFGVX CIPHER STOP UNFORTUNATELY I CANNOT GIVE YOU ANY MORE
+CLUES STOP
+
+NEW PARAGRAPH
+
+IN TERMS OF THIS STAGE THE SHIBBOLETH THAT YOU SHOULD TAKE
+NOTE OF IS MOLYBDENUM
+
+NEW PARAGRAPH
+
+YOU WILL PROBABLY HAVE NOTICED BY NOW THAT EACH STAGE IS IN A
+DIFFERENT CIPHER AND IS USUALLY IN AN APPROPRIATE LANGUAGE STOP
+SO THE VIGENERE STAGE WAS IN FRENCH AND THIS PLAYFAIR STAGE IS
+IN ENGLISH STOP IF THE PATTERN PERSISTS THEN THE NEXT STAGE
+WILL BE IN GERMAN STOP BUT DOES THE PATTERN PERSIST QUESTION
+MARK Q
+
+(Uppercase X's scattered through the text are Playfair padding artifacts
+inserted between repeated letter pairs before encryption.)
+
+============================================================
+METHODOLOGY
+============================================================
+
+Cipher identification
+---------------------
+The README hint states "This is a Playfair cipher."  Playfair is a
+digraphic substitution cipher that encrypts letter pairs using a 5x5
+key square, with I and J sharing one cell (25 unique letters total).
+
+Decryption rules (standard variant):
+  Same row    -> each letter shifts LEFT  by one (mod 5)
+  Same column -> each letter shifts UP    by one (mod 5)
+  Rectangle   -> each letter takes the column index of the other
+
+Solver: Simulated Annealing + Hill-Climbing
+-------------------------------------------
+With a 664-character ciphertext (332 digraphs), the key space is 25!
+which is far too large to brute-force.  Instead, script decrypt_stage06.py
+uses:
+
+1. Language scorers:
+   - English  (quadgrams built from KJV Bible + Frankenstein, ../misc/)
+   - French   (prebuilt ../misc/french_quadgrams.txt)
+   - German   (prebuilt ../misc/german_quadgrams.txt)
+   - Italian  (prebuilt ../misc/italian_quadgrams.txt)
+   - Spanish  (prebuilt ../misc/spanish_quadgrams.txt)
+
+2. Simulated Annealing (SA):
+   - 100 independent restarts per language scorer
+   - 5,000 annealing steps per restart, temperature 15.0 -> 0.10
+   - Six perturbation strategies (cell swap 50%, row swap 10%, column swap
+     10%, row reverse 10%, column reverse 10%, transpose 10%)
+
+3. Hill-Climbing (HC):
+   - Pure greedy ascent from the SA result
+   - Stops after 3,000 consecutive non-improving steps (max 20,000 steps)
+
+4. NumPy vectorization:
+   - Playfair decryption of all 332 pairs is done with masked NumPy arrays
+   - Quadgram scoring uses a flat 25^4 = 390,625-entry float64 lookup table
+   - Together these give ~20-40x speedup vs. pure-Python dict lookups,
+     enabling 100 restarts per language in a practical runtime
+
+The French scorer found the correct English plaintext (score -3485.1)
+on restart 5.  The Italian scorer produced a slightly lower (worse) score
+of -3549.7 and did not converge to readable text within 100 restarts.
+This is expected: both French and English share many letter-sequence
+patterns, so the French quadgram model is an effective scorer for English.
+
+Notes on X padding
+------------------
+Playfair inserts an X between repeated letters in a plaintext digraph
+and may append X to make the message even-length.  The decrypted output
+therefore contains spurious X's, e.g.:
+  "ACXCORDINGTO" = "ACCORDINGLY"   (X inserted between double C)
+  "ATTEMPTXTOCRYP" = "ATTEMPT TO CRYPT..."  (X = separator)
+  "YOUWILXLPROB"  = "YOU WILL PROB..."     (X inserted between double L)
+
+Stage 07 hint (from plaintext)
+------------------------------
+Stage 07 is an ADFGVX-type cipher, described as "more complicated than a
+straightforward ADFGVX cipher."  Based on the language pattern
+(Vigenere=French, Playfair=English), stage 07 is likely in German.
+
+============================================================
+FILES
+============================================================
+
+  decrypt_stage06.py     Solver (SA+HC, numpy-vectorized)
+  decrypted_stage06.txt  Full solver output with key square and plaintext
+  ciphertext_stage06.txt Original ciphertext
+  README                 This file

@@ -1,0 +1,207 @@
+This appears to be ciphertext encrypted with an Enigma machine. The
+illustration shows the connections within each rotor and the reversing
+rotor of the machine. It should be noted, however, that the rotor positions
+are incorrectly depicted. Actually, rotors 1 and 2 should be interchanged.
+The original rotor position, ring position, and connector position are unknown.
+
+The language should be German.
+
+Note that the challenge also has two additional bits of information:
+
+Schlussel
+0716150413020110
+
+Schriftzeichen
+<the contents of a uuencoded file, which is saved in
+uuencoded_stuff_stage08.uue and which I have uudecoded to DEBUGGER.bin>
+
+
+=============================================================================
+SOLUTION NOTES  (decrypt_stage08.py)
+=============================================================================
+
+CODEWORD:  PLUTO
+
+
+-----------------------------------------------------------------------------
+1. ARTEFACTS PROVIDED BY THE CHALLENGE
+-----------------------------------------------------------------------------
+
+a) stage_8_enigma.jpg
+   A wiring diagram with six labelled columns:
+     Umkehrwalze | Walze 3 | Walze 2 | Walze 1 | Steckerbrett | Tastatur
+
+   Reading each column letter-by-letter and comparing against the published
+   Wehrmacht Enigma I rotor catalogue:
+
+     Walze 3 column  ->  matches Rotor III wiring  (BDFHJLCPRTXVZNYEIWGAKMUSQO)
+                         turnover notch fires when window = V (position 21)
+     Walze 2 column  ->  matches Rotor I  wiring  (EKMFLGDQVZNTOWYHXUSPAIBRCJ)
+                         turnover notch fires when window = Q (position 16)
+     Walze 1 column  ->  matches Rotor II wiring  (AJDKSIRUXBLHWTMCQGZNPYFVOE)
+                         turnover notch fires when window = E (position 4)
+     Umkehrwalze     ->  matches Reflector B      (YRUHQSLDPXNGOKMIEBFZCWVJAT)
+
+   The README states "rotors 1 and 2 should be interchanged."  In the image
+   Walze 1 is the rightmost (fastest) rotor slot and Walze 2 is the middle
+   slot.  After swapping the rotor *types* between those two slots, the
+   corrected physical arrangement left -> right is:
+
+       Slot 3 (left / slow)   = Rotor III
+       Slot 2 (middle)        = Rotor II   <- was Rotor I in the diagram
+       Slot 1 (right / fast)  = Rotor I    <- was Rotor II in the diagram
+
+b) ciphertext_stage08.txt
+   367 uppercase letters.  Spaces and line-breaks are formatting only.
+
+c) uuencoded_stuff_stage08.uue / DEBUGGER.BIN
+   A UU-encoded 8-byte binary file.  Decoding it yields the hex string:
+       34 67 80 fe 5d 4d fc f1
+   This is DES("DEBUGGER") encrypted with key 0716150413020110.
+   It is a hint for Stage 9, not required to break this Enigma cipher.
+
+d) Schlussel 0716150413020110
+   The DES key for Stage 9 (see above).  Also a hint for Stage 9.
+
+
+-----------------------------------------------------------------------------
+2. THE ENIGMA MACHINE MODEL
+-----------------------------------------------------------------------------
+
+Each keypress advances the rotors THEN passes the signal through:
+
+  Keyboard -> Plugboard -> Rotor I (right, fast) -> Rotor II (middle)
+           -> Rotor III (left, slow) -> Reflector B
+           -> Rotor III bwd -> Rotor II bwd -> Rotor I bwd
+           -> Plugboard -> Lamp
+
+Stepping rules (evaluated before each keypress):
+  * Right rotor always steps.
+  * If right rotor's window == its notch letter (Q for Rotor I), the middle
+    rotor also steps.
+  * If middle rotor's window == its notch letter (E for Rotor II), BOTH the
+    middle and left rotors step -- the famous "double-step anomaly".
+
+The Enigma is reciprocal: encrypting a ciphertext with the same starting
+state recovers the plaintext.  One function handles both.
+
+Ring setting vs. position:
+  The ring setting (Ringstellung) offsets the internal wiring relative to
+  the outer lettered ring.  The effective wiring offset for rotor i is
+  (position_i - ring_i) mod 26.  The notch, however, is attached to the
+  outer ring, so it fires at window_position == notch_letter regardless of
+  the ring setting.
+
+
+-----------------------------------------------------------------------------
+3. BREAKING THE CIPHER
+-----------------------------------------------------------------------------
+
+Step 1 -- Find rotor positions using the Index of Coincidence (IoC).
+
+  IoC = sum( n_i*(n_i-1) ) / N*(N-1)
+  German text: ~0.076.  Random text: ~0.038.
+
+  When we decrypt with the correct rotors but NO plugboard, the output is
+  NOT a simple monalphabetic substitution of the plaintext (the plugboard
+  interacts with the rotor wiring in a position-dependent way).  However the
+  IoC of the no-stecker output is still noticeably higher than random
+  (~0.051 for the correct settings vs ~0.038 for wrong settings), giving a
+  clear signal to locate the correct rotor positions.
+
+  We sweep all 17,576 combinations (26^3 starting positions, ring=AAA).
+  Peak IoC = 0.0511 found at:
+      ring = AAA,  start position = AGL
+
+  Note: ring=AAA/pos=AGL is mathematically equivalent to ring=AZA/pos=AFL
+  for this particular 367-character message.  Both give the same effective
+  wiring offsets AND the same stepping schedule (the middle rotor's notch
+  would only fire around character 604, well past our message length, so
+  the left rotor never moves at all).
+
+Step 2 -- Find the plugboard (Steckerbrett) by hill-climbing.
+
+  With the rotor positions fixed at ring=AAA / pos=AGL, we run a greedy
+  hill-climb over all possible plugboard pair assignments.
+
+  At each iteration we try connecting every unordered pair of letters (a, b):
+    1. Disconnect a and b from their current partners (if any).
+    2. Connect a <-> b.
+    3. Keep the change if it raises the German bigram/trigram score
+       (plus a large bonus for the crib "DASXLOESUNGSWORTXIST" at the start).
+
+  Starting from no pairs (identity plugboard), the search converges on
+  restart 0 without any random restarts needed, finding:
+
+      A<->S,  E<->I,  J<->N,  K<->L,  M<->U,  O<->T   (6 pairs)
+
+  The remaining 14 letters (C, D, F, G, H, P, Q, R, V, W, X, Y, Z and B)
+  are "unsteckered" (each maps to itself).  A standard Wehrmacht Enigma
+  typically uses 10 plugboard pairs; this cipher uses only 6.
+
+
+-----------------------------------------------------------------------------
+4. FINAL MACHINE CONFIGURATION
+-----------------------------------------------------------------------------
+
+  Rotors (left to right):   III  II  I
+  Reflector:                B
+  Ring settings (L M R):    A    A   A   (equivalently: A Z A)
+  Start positions (L M R):  A    G   L   (equivalently: A F L with ring AZA)
+  Plugboard pairs:          AS  EI  JN  KL  MU  OT
+
+
+-----------------------------------------------------------------------------
+5. DECRYPTED PLAINTEXT
+-----------------------------------------------------------------------------
+
+Raw output (X = word separator, XX = sentence end):
+  DASXLOESUNGSWORTXISTXPLUTOXXSTUFEXNEUNXENTHAELTXEINEXMITTEILUNGXDIEX
+  MITXDESXENTKODIERTXISTXXICHXHABEXDASXLINKSSTEHENDEXBYTEXDESXSCHLUESSELS
+  XENTDECKTXXESXISTXEINSXEINSXZEROXEINSXZEROXZEROXEINSXEINSXEINSXXICH
+  XPROGRAMMIERTEXDESXUNDXENTDECKTEXDASSXDASXWORTXDEBUGGERXWENNXESXMITX
+  DEMXZUGRUNDELIEGENDENXSCHLUESSELXENTKODIERTXWIRDXALSXRESULTATXDIEX
+  SCHRIFTZEICHENXUNTENXERGIBT
+
+Formatted (XX -> '. ', X -> ' '):
+  DAS LOESUNGSWORT IST PLUTO. STUFE NEUN ENTHAELT EINE MITTEILUNG DIE
+  MIT DES ENTKODIERT IST. ICH HABE DAS LINKSSTEHENDE BYTE DES SCHLUESSELS
+  ENTDECKT. ES IST EINS EINS ZERO EINS ZERO ZERO EINS EINS EINS. ICH
+  PROGRAMMIERTE DES UND ENTDECKTE DASS DAS WORT DEBUGGER WENN ES MIT DEM
+  ZUGRUNDELIEGENDEN SCHLUESSEL ENTKODIERT WIRD ALS RESULTAT DIE
+  SCHRIFTZEICHEN UNTEN ERGIBT
+
+Translation:
+  "The solution word is PLUTO. Stage nine contains a message which is
+  encrypted with DES. I have discovered the leftmost byte of the key.
+  It is 1 1 0 1 0 0 1 1 1. I programmed DES and discovered that the word
+  DEBUGGER when decrypted with the underlying key yields the characters
+  shown below."
+
+  The characters below (DEBUGGER.BIN) are the 8 bytes: 34 67 80 fe 5d 4d fc f1
+  The DES key is 0716150413020110 (= Schlussel).
+
+
+-----------------------------------------------------------------------------
+6. STAGE 9 CONTEXT
+-----------------------------------------------------------------------------
+
+  The plaintext reveals the setup for Stage 9:
+    * Stage 9 message is DES-encrypted.
+    * Leftmost byte of the DES key is binary 110100111 (stated in the text).
+    * Schlussel 0716150413020110 is the full DES key.
+    * DEBUGGER.BIN (346780fe5d4dfcf1) = DES("DEBUGGER") with that key.
+      This is a verification value / known-plaintext hint for Stage 9.
+
+
+-----------------------------------------------------------------------------
+7. FILES
+-----------------------------------------------------------------------------
+
+  decrypt_stage08.py          -- Main solver (Enigma model, IoC search,
+                                 hill-climbing plugboard, UUE decoder)
+  ciphertext_stage08.txt      -- 367-character ciphertext (input)
+  uuencoded_stuff_stage08.uue -- UU-encoded DEBUGGER.BIN (stage-9 hint)
+  plaintext_stage08.txt       -- Decrypted output (written by solver)
+  stage_8_enigma.jpg          -- Enigma wiring diagram (image, input)
+  README                      -- This file

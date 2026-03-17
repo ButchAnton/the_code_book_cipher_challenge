@@ -1,0 +1,36 @@
+This is a simple monoalphabetic substitution cipher.
+
+============================================================
+SOLUTION NOTES
+============================================================
+
+Cipher type:  Monoalphabetic substitution
+              Each cipher letter maps to exactly one plaintext letter.
+              Spaces and punctuation are left unchanged.
+
+Source text:  Daniel 5:5-12 (King James Bible)
+              The passage describes the "writing on the wall" during
+              King Belshazzar's feast, interpreted by Daniel.
+
+Archaic spellings preserved in the ciphertext:
+  - HYS  (archaic "HIS")
+  - HYM  (archaic "HIM")
+  - ABOVT (archaic "ABOUT")
+  These reflect early printed English orthography and are not errors.
+
+Substitution key (cipher letter -> plaintext letter):
+  A->C   B->I   C->O   D->V   E->Y   F->B
+  G->L   H->K   I->F   J->T   K->Q   L->M
+  M->A   N->D   O->Z   P->H   Q->P   R->S
+  S->J   T->N   U->U   V->R   W->G   X->E
+  Y->W   Z->X
+
+Codeword:  OTHELLO
+
+Method:    decrypt_stage01.py
+  1. Builds quadgram log-probability statistics from ../misc/kjv.txt.
+  2. Starts hill-climbing from a frequency-analysis initial key
+     (most-frequent cipher letter -> 'E', etc.).
+  3. Refines by trying all 325 pairwise key swaps; keeps any
+     swap that improves the quadgram score.
+  4. Solved on the first restart (no random restarts needed).

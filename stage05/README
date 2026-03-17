@@ -1,0 +1,94 @@
+The type of cipher is unknown.
+
+============================================================
+SOLUTION
+============================================================
+
+Codeword: ILLIAD
+
+Cipher type: Book cipher (positional index cipher)
+
+Source text: Fermat's Latin marginal note, as reproduced in
+             "Fermat's Last Theorem" by Simon Singh (1997)
+
+Language: Spanish
+
+============================================================
+PLAINTEXT
+============================================================
+
+(raw decoded string, lowercase)
+plaifairciphereselproximonivellapalabrasecretaesilliad
+
+(with word breaks)
+plaifair cipher es el proximo nivel la palabra secreta es illiad
+
+(translated)
+"Playfair cipher is the next level; the secret word is illiad"
+
+Note: "illiad" appears with a double-L in the decoded text, which
+differs from the standard English spelling "Iliad".  The double-L
+reflects the character at that index position in the Latin source
+text and is therefore the accepted codeword spelling.
+
+============================================================
+METHODOLOGY
+============================================================
+
+Cipher identification
+---------------------
+The ciphertext is a sequence of 54 small positive integers, grouped
+in lines of 12 (with a final line of 6).  The largest value is 217,
+which implies a source text of at least 217 characters.
+
+The integer-sequence format, combined with the competition's thematic
+connection to "Fermat's Last Theorem" by Simon Singh (mentioned in
+The Code Book), strongly suggested a book cipher whose source text is
+the famous Latin marginal note written by Pierre de Fermat c. 1637.
+
+Source text identification
+--------------------------
+Fermat's note reads (in Latin):
+
+  Cubem autem in duos cubos, aut quadratoquodratum in duos
+  quadratoquadratos, et generaliter nullam in infinitum ultra
+  quadratum potestatem in duos eiusdem nominis fas est dividere.
+  Cuius rei demonstrationem mirabilem sane detexi hanc marginis
+  exiguitas non careret.
+
+(English translation: "It is impossible for a cube to be written as
+a sum of two cubes, or a fourth power as a sum of two fourth powers,
+or in general for any power greater than two to be written as a sum
+of two like powers.  I have a truly marvellous demonstration of this
+proposition which this margin is too narrow to contain.")
+
+Decryption procedure
+--------------------
+1. Strip all whitespace and punctuation from the Latin text to
+   produce a 225-character alphanumeric string:
+
+   Cubemauteminduoscubosautquadratoquodratuminduos...noncareret
+
+2. Each integer in the ciphertext is a 1-based index into this
+   stripped string.  The character at that position (lowercased)
+   is one letter of the plaintext.
+
+3. Mapping all 54 indices yields the Spanish message above.
+
+Implemented in stage05.py.
+
+Stage 06 hint (from plaintext)
+------------------------------
+The plaintext reveals that stage 06 is a Playfair cipher and that
+the key (shibboleth) is ILLIAD.  Stage 06 was confirmed to be a
+Playfair cipher written in English, with codeword MOLYBDENUM.
+
+============================================================
+FILES
+============================================================
+
+  stage05.py             Book cipher decoder (index-based)
+  candidate_text.txt     Fermat's Latin marginal note (the source text)
+  ciphertext_stage05.txt Original ciphertext (54 integer indices)
+  README                 This file
+  README.original        Backup of the original exploratory notes

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \":*)",
+      "Bash(py -3 -c \":*)",
+      "Bash(py -3 decrypt_stage07.py)",
+      "Bash(grep -n \"\\\\\\\\u\\\\|[^[:ascii:]]\" decrypt_stage07.py)",
+      "Bash(dir \"C:\\\\Users\\\\banton\\\\iCloudDrive\\\\src\\\\cipher_challenge\\\\stage07\\\\decrypt_stage07.py\")",
+      "Bash(pkill -f \"decrypt_stage07.py\")",
+      "Bash(py -3 diag_stage07.py)",
+      "Bash(pkill -f \"sa_run\\\\|random_poly\\\\|PYEOF\")",
+      "Bash(pkill -f \"b30d46b\")",
+      "Bash(py -3:*)",
+      "Bash(/c/Users/banton/iCloudDrive/src/cipher_challenge/stage07/fast_decode.py:*)",
+      "Bash(python C:/Users/banton/iCloudDrive/src/cipher_challenge/stage07/fast_decode.py)",
+      "Bash(tasklist /FI \"IMAGENAME eq python.exe\")",
+      "Bash(/c/Users/banton/iCloudDrive/src/cipher_challenge/stage07/homo_fix.py:*)",
+      "Bash(python C:/Users/banton/iCloudDrive/src/cipher_challenge/stage07/homo_fix.py)",
+      "Bash(PYTHONUTF8=1 python C:/Users/banton/iCloudDrive/src/cipher_challenge/stage07/homo_fix.py)",
+      "Bash(tasklist)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''diag_stage07.py''\\).read\\(\\)\\); print\\(''diag_stage07.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''fast_decode.py''\\).read\\(\\)\\); print\\(''fast_decode.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''fast_decode.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''fast_decode.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''homo_fix.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''homo_fix.py OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''decrypt_stage07.py'', encoding=''utf-8''\\).read\\(\\)\\); print\\(''decrypt_stage07.py OK''\\)\")",
+      "Bash(wc -l /c/Users/banton/iCloudDrive/src/cipher_challenge/stage07/*.py)"
+    ]
+  }
+}

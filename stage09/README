@@ -1,0 +1,296 @@
+This is a DES encrypted file.
+
+From the previous stage, we know that:
+Stage nine contains a message which is encrypted with DES. I have discovered
+the leftmost byte of the key. It is 110100111. I programmed DES and
+discovered that the word DEBUGGER when
+it is decrypted with the key below, yields the characters shown below:
+Key:
+0716150413020110
+Characters: (in hex, also in the file DEBUGGER.bin)
+6734fe804d5df1fc
+
+The uuencoded version of the ciphertext that appears on Simon's Singh's
+website for The Code Book Cipher Challenge is corrupt. I scanned the page
+from the book, OCR'd it, and then hand-corrected it. I don't know if it's
+right, though. Sadly, Simon didn't make any allowances for the
+verification of correctness of the ciphertexts in the book.
+
+
+=============================================================================
+SOLUTION NOTES  (crack_des_cuda.cu, des_fix_ciphertext.c)
+=============================================================================
+
+CODEWORD:  ARMSTRONG
+
+
+-----------------------------------------------------------------------------
+1. ARTEFACTS PROVIDED BY THE CHALLENGE
+-----------------------------------------------------------------------------
+
+a) text.d
+   1112 bytes of binary data — the DES-encrypted ciphertext, in ECB mode.
+   Contains 139 eight-byte blocks.  The file was obtained by scanning the
+   relevant page of "The Code Book" and OCR-correcting the uuencoded
+   listing; it has TWO corrupted blocks as a result (see section 4).
+
+b) DEBUGGER.BIN  (from Stage 8)
+   8 bytes: 67 34 fe 80 4d 5d f1 fc
+   This is the verification value DES_decrypt("DEBUGGER", stage9_key).
+   Decrypting the ASCII text "DEBUGGER" with the correct Stage 9 key
+   should produce these bytes.
+
+   NOTE: Stage 8 also provided the Schlussel 0716150413020110, which is
+   a DIFFERENT DES key — the one used to generate the DEBUGGER.BIN hint,
+   not the key encrypting the Stage 9 ciphertext.
+
+c) Known key constraints (from Stage 8 Enigma plaintext)
+   The Stage 8 Enigma message stated: "I have discovered the leftmost byte
+   of the key.  It is 1 1 0 1 0 0 1 1 1."  Reading those 9 bits:
+     bits 8–2 = 1101001 = effective bits of byte[0]  → byte[0] = 0xD3
+     bits 1–0 = 11       = top 2 effective bits of byte[1]
+   This constrains 9 of the 56 effective DES key bits, leaving 47 unknown.
+
+
+-----------------------------------------------------------------------------
+2. DES CIPHER BACKGROUND
+-----------------------------------------------------------------------------
+
+DES (Data Encryption Standard) is a 64-bit block cipher standardized by
+NIST in 1977.  Each 8-byte block is encrypted independently with the same
+key in ECB (Electronic Code Book) mode.
+
+The 64-bit key has 56 effective bits (every 8th bit is an odd-parity check
+bit that carries no key information).  The cipher's internal pipeline is:
+
+  Plaintext (64 bits)
+    --> IP (Initial Permutation)
+    --> 16 Feistel rounds, each using a 48-bit round subkey
+    --> FP (Final Permutation = IP^-1)
+  Ciphertext (64 bits)
+
+Each Feistel round:
+  1. Expand the 32-bit right half R to 48 bits (E expansion)
+  2. XOR with the 48-bit round subkey (from the key schedule)
+  3. Feed through eight S-boxes (6 bits in, 4 bits out each)
+  4. Permute the 32-bit S-box output (P permutation)
+  5. XOR the result into the left half L
+  6. Swap L and R
+
+Key schedule: PC1 splits the 56 key bits into two 28-bit halves C and D.
+Each round, C and D are left-rotated by 1 or 2 bits; PC2 then selects 48
+bits from {C, D} to form the round subkey.  The total rotation across all
+16 rounds is 28 bits (a full circle), so C(16) = C(0).  This property is
+exploited for on-the-fly key scheduling during decryption (see section 3).
+
+SP-table optimization: the eight S-boxes plus the P permutation are
+combined into eight 64-entry lookup tables (SP1–SP8), each mapping 6 bits
+to 32 bits.  This eliminates the S-box and P-permutation loops and is the
+standard technique in fast software DES implementations (Eric Young's
+libdes, SSL, etc.).
+
+Pre-rotated IP/FP: this implementation uses a further optimization where
+the IP includes a ROL-1 of each half, and the FP includes the matching
+ROR-1.  This lets the Feistel function align the 6-bit SP-box groups with
+a simple ROR-4, avoiding per-round bit extraction.  The SP entries are
+pre-rotated to match.
+
+DES is reciprocal under key reversal: decrypting is identical to
+encrypting except that the 16 subkeys are applied in reverse order.
+
+
+-----------------------------------------------------------------------------
+3. BREAKING THE CIPHER — GPU BRUTE FORCE
+-----------------------------------------------------------------------------
+
+Key space reduction:
+  Total DES effective key bits:    56
+  Known from Stage 8:               9  (7 of byte[0], 2 of byte[1])
+  Remaining unknown bits:          47
+  Keys to search:                 2^47 ≈ 140.7 trillion
+
+Filtering strategy (no known plaintext crib needed):
+  English prose encrypted with DES will have essentially all printable
+  ASCII bytes (0x20–0x7E, 0x0A, 0x0D).  A random 8-byte block has only
+  a ~0.02% chance of being all-printable.
+
+  Filter 1: decrypt block 0; if not all-ASCII, discard (eliminates 99.98%)
+  Filter 2: decrypt blocks 1–9; require ≥50% all-ASCII (eliminates false
+            positives from Filter 1, at the cost of ~10× more work per
+            surviving candidate — but surviving candidates are extremely rare)
+
+GPU implementation (crack_des_cuda.cu):
+  Platform:  NVIDIA RTX 3090 (Ampere SM 8.6, 82 SMs, 10496 CUDA cores)
+  Throughput: ~3.77 billion keys/second
+  Run time:  7112 seconds (~2 hours) to find the key
+
+  Key optimizations:
+  * On-the-fly key schedule: instead of pre-storing all 32 subkey words
+    (128 bytes/thread), subkeys are computed from C, D inside the Feistel
+    loop.  For decryption, start at C(16) = C(0) and walk backwards,
+    right-rotating by KEY_SHIFTS[round] after each use.  This saves 128
+    bytes of register/local memory per thread, dramatically improving SM
+    occupancy.
+  * SP tables in shared memory: the 512-entry SP table (2 KiB) is copied
+    from global to per-block shared memory at kernel launch.  Constant
+    memory serialises divergent warp accesses; shared memory serves them
+    in parallel (modulo bank conflicts).
+  * No plaintext storage: each block's ASCII status is checked inline and
+    the plaintext bytes are never stored.
+  * #pragma unroll: the 16-round loop is fully unrolled by the compiler.
+
+  Key index encoding: the 47-bit key_idx encodes the 47 unknown bits:
+    bits [46:42] → byte[1] effective bits [4:0]  (top 2 bits fixed = 11)
+    bits [41:35] → byte[2] effective bits [6:0]
+    bits [34:28] → byte[3] effective bits [6:0]
+    bits [27:21] → byte[4] effective bits [6:0]
+    bits [20:14] → byte[5] effective bits [6:0]
+    bits [13:7]  → byte[6] effective bits [6:0]
+    bits [6:0]   → byte[7] effective bits [6:0]
+
+  The search found the key at index ≈ 19% of the way through the space,
+  after testing ≈ 26.7 trillion candidate keys.
+
+Key found:  D3CD1694CBA126FE
+
+Verification:  DES_decrypt(block_0_of_text.d, key) = "O! curse" ✓
+
+
+-----------------------------------------------------------------------------
+4. CIPHERTEXT CORRUPTION
+-----------------------------------------------------------------------------
+
+The ciphertext was transcribed from the printed book via scan + OCR + hand-
+correction.  Two of the 139 blocks were corrupted in this process.
+
+des_diag.c (diagnostic) decrypts all blocks with the correct key and checks
+which ones produce non-ASCII output.  It found exactly two bad blocks:
+
+  Block 130 (offset 0x410, bytes 1040–1047):
+    Corrupted CT: d2 ab ed 2f ca 2d e1 2b
+    Raw decryption: 82 b7 35 fe fa 93 89 13  (not ASCII)
+    Context: block 129 = "y factor", block 131 = "public m"
+    Expected plaintext: "ing the "  (fitting "by factor[ing the ]public m")
+
+    Fix: des_fix_ciphertext.c re-encrypts "ing the " with the correct key
+    to compute the correct ciphertext bytes (22 72 7b ad b5 9e 0d c2) and
+    patches them into the binary file at offset 0x410.
+
+  Block 138 (offset 0x450, bytes 1104–1111):
+    Corrupted CT: 0e b6 a9 76 ea d7 3a fd
+    Raw decryption: 96 1e b0 cc 7b 34 2c 00  (not ASCII)
+    This is the last block.  It is padding (or trailing garbage from the
+    transcription error).  The preceding block 137 decrypts to " luck!\n\n",
+    which is the natural end of the message.
+
+    Fix: des_fix_ciphertext.c writes a truncated version (1104 bytes, 138
+    blocks) that omits this block entirely.  The full 1112-byte version with
+    only block 130 patched is also written.
+
+Output files:
+  text_fixed.d        — 1112 bytes, block 130 patched, block 138 still corrupt
+  text_fixed_trunc.d  — 1104 bytes, block 130 patched, corrupt last block removed
+
+
+-----------------------------------------------------------------------------
+5. FINAL KEY
+-----------------------------------------------------------------------------
+
+  Algorithm:          DES, ECB mode
+  Key (hex):          D3 CD 16 94 CB A1 26 FE
+  Key byte[0]:        0xD3 = 11010011 (matches Stage 8 hint: 110100111)
+  Key byte[1]:        0xCD = 11001101 (top 2 effective bits = 11 ✓)
+  Blocks decrypted:   138 (1104 bytes)
+  Bad blocks skipped: 1 (block 130 patched), 1 (block 138 truncated)
+
+
+-----------------------------------------------------------------------------
+6. DECRYPTED PLAINTEXT
+-----------------------------------------------------------------------------
+
+O! cursed, cursed slave.  Whip me, ye devils,
+From the possession of this heavenly sight!
+Blow me about in winds! roast me in sulphur!
+Wash me in steep-down gulfs of liquid fire!
+O Desdemona! Desdemona! dead!
+
+Only one more phase to go.  Your token for this one is "Armstrong".
+
+The final hurdle contains two ciphertexts.  The longer one is
+encrypted with triple-DES in electronic code book mode.  It uses a
+128-bit EDE key.
+
+The RSA public key cryptosystem has been used to encipher the
+triple-DES key; this forms the shorter ciphertext.  The public
+exponent is 3735928559 in decimal and the public modulus is the
+following 155-digit decimal integer:
+
+10742 78829 12665 65907 17841 12799 42116 61266 39217 94753 29458
+88778 17210 35546 41509 80121 87903 38329 26235 28109 07506 72083
+50494 19964 33143 42555 83344 01855 80898 94268 92463.
+
+Your task is to decipher the longer message and so discover the final
+code word.  How you do this is up to you, but it will almost certainly
+be much, much easier to break the RSA ciphertext by factoring the
+public modulus than by any other approach.
+
+Good luck!
+
+Source: Shakespeare, Othello, Act V, scene ii (Othello's dying speech).
+The fragment begins at "O! cursed, cursed slave."
+
+Note: The last few bytes of the plaintext contain garbage characters
+("°Ì{4, .").  This is an artefact of the corrupted transcription of
+block 138 and can be ignored.
+
+
+-----------------------------------------------------------------------------
+7. STAGE 10 CONTEXT
+-----------------------------------------------------------------------------
+
+The plaintext reveals the full setup for Stage 10:
+
+  * The Stage 10 message is encrypted with triple-DES (3DES) in ECB mode,
+    using a 128-bit EDE key (two 64-bit DES keys: K1, K2).
+    EDE means: encrypt with K1, decrypt with K2, encrypt with K1 again.
+
+  * The 3DES key itself is RSA-encrypted, forming a shorter ciphertext.
+
+  * RSA public exponent:  3735928559  (= 0xDEADBEEF)
+  * RSA public modulus:   155-digit integer shown in the plaintext above.
+
+  * The recommended attack is to factor the modulus.  At publication time
+    (1999), this was a serious challenge; modern factoring algorithms
+    (GNFS) can handle ~155-digit numbers on a standard PC.
+
+
+-----------------------------------------------------------------------------
+8. FILES
+-----------------------------------------------------------------------------
+
+  crack_des_cuda.cu       -- GPU brute-force DES cracker (CUDA, RTX 3090)
+                             Implements DES decryption with SP-table
+                             optimization and on-the-fly key schedule.
+                             Self-tests against NIST vectors.  Decrypts
+                             full ciphertext once a candidate key is found.
+
+  des_diag.c              -- Diagnostic: compare textbook DES with SP-table
+                             DES round-by-round to verify correctness.
+                             Used during development to identify bugs in the
+                             IP/FP implementation and PC2 packing.
+
+  des_fix_ciphertext.c    -- Identifies corrupted ciphertext blocks, computes
+                             correct replacements by re-encrypting known
+                             plaintext, patches the binary file, and writes
+                             corrected output (text_fixed.d, text_fixed_trunc.d).
+
+  text.d                  -- Original ciphertext (1112 bytes, 2 bad blocks)
+  text_fixed.d            -- Block 130 patched (1112 bytes)
+  text_fixed_trunc.d      -- Block 130 patched, block 138 removed (1104 bytes)
+  text_fixed.uue          -- UU-encoded version of text_fixed.d
+  text_fixed_trunc.uue    -- UU-encoded version of text_fixed_trunc.d
+  plaintext.txt           -- Final decrypted output (written by crack_des_cuda)
+  analyze_result.txt      -- Full block-by-block diagnostic dump (from des_diag.c)
+  fix_result.txt          -- Output of des_fix_ciphertext.c
+  DEBUGGER.BIN            -- 8-byte Stage 8 hint: DES_decrypt("DEBUGGER", key9)
+  README                  -- This file

@@ -1,0 +1,204 @@
+The final hurdle contains two ciphertexts.  The longer one is
+encrypted with triple-DES in electronic code book mode.  It uses a
+128-bit EDE key.
+
+The RSA public key cryptosystem has been used to encipher the
+triple-DES key; this forms the shorter ciphertext.  The public
+exponent is 3735928559 in decimal and the public modulus is the
+following 155-digit decimal integer:
+
+10742 78829 12665 65907 17841 12799 42116 61266 39217 94753 29458
+88778 17210 35546 41509 80121 87903 38329 26235 28109 07506 72083
+50494 19964 33143 42555 83344 01855 80898 94268 92463.
+
+Your task is to decipher the longer message and so discover the final
+code word.  How you do this is up to you, but it will almost certainly
+be much, much easier to break the RSA ciphertext by factoring the public
+modulus than by any other approach.
+
+
+=============================================================================
+SOLUTION NOTES  (validate_inputs.py, solve_stage10.py)
+=============================================================================
+
+CODEWORD:  DRYDEN
+           (John Dryden, 17th-century English poet, 1631-1700)
+
+
+-----------------------------------------------------------------------------
+1. CIPHER SYSTEM — HYBRID RSA + DES ENCRYPTION
+-----------------------------------------------------------------------------
+
+Stage 10 uses a two-layer hybrid cryptosystem, the same design used in
+real-world protocols such as TLS and PGP:
+
+  Layer 1 (outer): RSA public-key encryption protects the symmetric key.
+    * RSA modulus N: 512-bit (155-digit) semiprime, N = p * q
+    * Public exponent e = 3,735,928,559 = 0xDEADBEEF (a playful choice
+      by Simon Singh — DEADBEEF is a famous debugging magic number)
+    * Encryption: C = M^e mod N, where M is the DES key
+    * Shorter message file: the RSA ciphertext C (a 155-digit integer)
+
+  Layer 2 (inner): DES symmetric-key encryption protects the actual text.
+    * Cipher: Single DES in ECB (Electronic Codebook) mode, 8-byte key
+    * Ciphertext: text.d — a 200-byte binary file (25 DES blocks of 8 bytes)
+    * Source: longer_message_stage10.uue (UUencoded), decoded to text.d
+
+NOTE: The README states "triple-DES with a 128-bit EDE key," but the
+actual encryption is SINGLE DES.  RSA decryption yields a 16-byte value M;
+only the FIRST 8 bytes form the DES key — the remaining 8 bytes are unused.
+This is a deliberate misdirection (or an inconsistency in the challenge).
+
+To decrypt, one must reverse both layers:
+  Step 1: Factor the RSA modulus N into its prime factors p and q.
+  Step 2: Compute the RSA private exponent d from p and q.
+  Step 3: Compute M = C^d mod N to recover the DES key.
+  Step 4: Decrypt text.d with M[0:8] (single DES, ECB mode) to get plaintext.
+
+
+-----------------------------------------------------------------------------
+2. STEP 1 — FACTORING THE RSA MODULUS (validate_inputs.py)
+-----------------------------------------------------------------------------
+
+The security of RSA rests entirely on the difficulty of factoring N.
+A 512-bit modulus was considered secure in 1999 (when the challenge was
+published), but is now within reach of a modern workstation.
+
+The comparison point: the RSA-155 challenge (a different 512-bit number)
+was first factored in 1999 by an academic team of ~300 CPU-years.
+Today, a single server with many cores can do it in about a day.
+
+Quick checks (validate_inputs.py) — tried first, took seconds:
+  * Trial division up to 10^7: failed (smallest factor is ~256-bit)
+  * Pollard's rho (Brent variant), 5 seeds, 10^7 iterations: failed
+  * Pollard's p-1, B = 10^6: failed (p-1 is not 10^6-smooth)
+
+These quick checks are expected to fail against cryptographic primes.
+They are run as a sanity check and to rule out "easy" cases.
+
+GNFS factorization (the actual approach):
+  Tool: CADO-NFS, an open-source General Number Field Sieve implementation.
+  Hardware: 64-core AMD Threadripper PRO 5995WX, 512GB RAM.
+  Total wall-clock time: approximately 18.5 hours.
+
+  GNFS phases:
+    1. Polynomial Selection (size-optimized)    ~47 minutes
+    2. Polynomial Selection (root-optimized)     ~5 minutes
+    3. Lattice Sieving (collecting relations)   ~14 hours   <- bottleneck
+    4. Filtering (deduplication, merging)       ~30 minutes
+    5. Linear Algebra (Krylov / lingen / mksol)  ~2.5 hours
+    6. Square Root (factor extraction)            ~3 minutes
+
+  Command used:
+    cd ~/cado-nfs
+    ./cado-nfs.py $(cat N.txt) -t all
+
+  Result (from CADO-NFS output "Square Root: Factors: <p> <q>"):
+    p = 12844205165381031491662259028977553198964984323915864368216177647043137765477
+    q = 836391832187606937820650856449710761904520026199724985596729108812301394489219
+
+  Verification: p * q == N  (confirmed)
+
+
+-----------------------------------------------------------------------------
+3. STEP 2 — RSA KEY RECOVERY (solve_stage10.py)
+-----------------------------------------------------------------------------
+
+With p and q known, computing the RSA private key is straightforward:
+
+  phi(N) = (p - 1) * (q - 1)        Euler's totient function
+
+  d = e^(-1) mod phi(N)              Modular inverse (Extended Euclidean)
+                                     Python 3.8+: d = pow(e, -1, phi_N)
+
+  M = C^d mod N                      RSA decryption (square-and-multiply)
+
+The recovered plaintext M as a 16-byte big-endian integer:
+  M = 0x462c6bad381031ad 64dccd9820a751a2
+
+Verification: M^e mod N == C  (round-trip confirmed)
+
+
+-----------------------------------------------------------------------------
+4. STEP 3 — DES KEY EXTRACTION AND DECRYPTION (solve_stage10.py)
+-----------------------------------------------------------------------------
+
+M is 16 bytes, but only the first 8 bytes form the DES key:
+  DES key: 0x462c6bad381031ad
+
+The script (solve_stage10.py) tries all plausible key extraction strategies:
+  Approach A: Textbook RSA — key is the low/high/all bytes of M, in various
+              alignments (8, 16, 24 bytes).
+  Approach B: PKCS#1 v1.5 — check for 0x00 0x02 padding header in M (not
+              present here; M starts with 0x00 0x00).
+  Approach C: Little-endian byte order — in case byte ordering was reversed.
+
+Each candidate key is tried against the 200-byte DES ciphertext (text.d).
+Success is detected automatically: a key that produces English plaintext
+will have > 85% printable bytes AND > 40% common English letters.  Wrong
+keys produce pseudorandom output (~37% printable), giving effectively zero
+false-positive rate.
+
+The winning candidate: "First 8 bytes of M" with single DES ECB.
+  Printable: 99%   English: YES
+
+
+-----------------------------------------------------------------------------
+5. CRYPTOGRAPHIC PARAMETERS SUMMARY
+-----------------------------------------------------------------------------
+
+  RSA modulus N   : 512-bit semiprime (155 decimal digits)
+  Public exponent : e = 3,735,928,559 = 0xDEADBEEF
+  RSA ciphertext  : shorter_message_stage10.txt (155-digit integer)
+  Factorization   : CADO-NFS GNFS, ~18.5 hours on 64-core workstation
+  Factors         : p (77 digits, 256 bits), q (78 digits, 256 bits)
+  DES key         : 462c6bad381031ad  (8 bytes = 64 bits, 56 effective)
+  DES mode        : ECB (Electronic Codebook)
+  DES ciphertext  : text.d (200 bytes = 25 blocks)
+
+
+-----------------------------------------------------------------------------
+6. DECRYPTED PLAINTEXT
+-----------------------------------------------------------------------------
+
+  For secrets are edged tools and must be kept from children and from fools.
+
+  The magic word you need to quote is DRYDEN.
+
+  Congratulations, you have solved the tenth and final stage of the challenge.
+
+Attribution: The quote is from John Dryden's play "Sir Martin Mar-All"
+(1667), Act II, Scene 2.  Dryden (1631-1700) was England's first Poet
+Laureate.
+
+
+-----------------------------------------------------------------------------
+7. FILES
+-----------------------------------------------------------------------------
+
+  validate_inputs.py             -- Parses and validates all inputs; runs
+                                    quick factoring (trial division, Pollard's
+                                    rho, Pollard's p-1); writes N.txt for
+                                    CADO-NFS.
+
+  solve_stage10.py               -- Main solver: RSA decryption (Miller-Rabin
+                                    primality check, modular inverse, M=C^d mod N)
+                                    and DES/Triple-DES decryption with automatic
+                                    English plaintext detection.
+
+  shorter_message_stage10.txt    -- RSA ciphertext C (155-digit decimal integer).
+
+  longer_message_stage10.uue     -- UUencoded DES ciphertext (longer message).
+
+  text.d                         -- Raw binary DES ciphertext, decoded from
+                                    the .uue file (200 bytes, 25 DES blocks).
+
+  N.txt                          -- Plain decimal modulus N, written by
+                                    validate_inputs.py for CADO-NFS input.
+
+  factoring_log.txt              -- Full CADO-NFS output log (~18.5 hour run).
+
+  plaintext.txt                  -- Decrypted English plaintext (written by
+                                    solve_stage10.py on successful decryption).
+
+  README                         -- This file.
